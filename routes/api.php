@@ -4,6 +4,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PinterestController;
 use App\Http\Middleware\ValidateCreatePin;
+use Illuminate\Support\Facades\Http;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -28,6 +30,21 @@ Route::get("/user/{sess}/board/", function (string $sess) {
     return PinterestController::get_board_list($sess, $user_data["username"]);
 });
 
+
+Route::post("/proxy/check", function (Request $request) {
+    $response = Http::withOptions(["proxy" => $request->proxy ?? ""])->get("https://api.ipify.org")->body();
+    return $response;
+});
+
+Route::get("/test/{sess}", function (string $sess) {
+    $response = Http::withHeaders([
+        "Cookie" => '_pinterest_sess="' . $sess . '"',
+        "X-Requested-With" => "XMLHttpRequest",
+        "Referer" => "https://pinterest.com/login/"
+    ])->acceptJson()->get("https://www.pinterest.com/resource/HomefeedBadgingResource/get/")->json();
+    return $response;
+});
+
 Route::post("/user/board/create", function (Request $request) {
     $data = array();
     $sess = $request->sess;
@@ -38,7 +55,11 @@ Route::post("/user/board/create", function (Request $request) {
     $data["description"] = $request->description ?? "";
     $data["link"] = $request->link ?? "";
     $data["alt_text"] = $request->alt_text ?? "";
-    return PinterestController::post_pin_to_board($sess, $data);
+
+    $proxy = $request->proxy ?? "";
+
+    return PinterestController::post_pin_to_board($sess, $data, $proxy);
 
 
 })->middleware(ValidateCreatePin::class);
+
