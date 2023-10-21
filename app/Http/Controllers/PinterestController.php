@@ -1,7 +1,14 @@
 <?php
 
 namespace App\Http\Controllers;
+use App\Http\Controllers\TempFileController;
+use FFMpeg\FFMpeg;
+use FFMpeg\FFProbe;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Support\Facades\Http;
+use FFMpeg\Coordinate\TimeCode;
 class PinterestController extends Controller
 {
     /**
@@ -84,12 +91,22 @@ class PinterestController extends Controller
         }
     }
 
-    public static function get_user_data_from_cookie(string $sess) {
-        $response = Http::withHeaders([
-            "Cookie" => '_pinterest_sess="' . $sess . '"',
-            "X-Requested-With" => "XMLHttpRequest",
-            "Referer" => "https://pinterest.com/login/"
-        ])->acceptJson()->get("https://www.pinterest.com/resource/HomefeedBadgingResource/get/")->json();
+    public static function get_user_data_from_cookie(string $sess, $proxy) {
+        if ($proxy == "") {
+
+            $response = Http::withHeaders([
+                "Cookie" => '_pinterest_sess="' . $sess . '"',
+                "X-Requested-With" => "XMLHttpRequest",
+                "Referer" => "https://pinterest.com/login/"
+            ])->acceptJson()->get("https://www.pinterest.com/resource/HomefeedBadgingResource/get/")->json();
+        }
+        else {
+            $response = Http::withHeaders([
+                "Cookie" => '_pinterest_sess="' . $sess . '"',
+                "X-Requested-With" => "XMLHttpRequest",
+                "Referer" => "https://pinterest.com/login/"
+            ])->withOptions(['proxy' => $proxy])->acceptJson()->get("https://www.pinterest.com/resource/HomefeedBadgingResource/get/")->json();
+        }
         $userData = $response['client_context']['user'] ?? array();
 
         $user = array();
@@ -225,4 +242,231 @@ class PinterestController extends Controller
         }
         return $respose;
     }
+
+    public static function register_upload_video($sess, $fileName)
+    {
+        $csrftoken = bin2hex(random_bytes(32));
+        $apiURL = "https://www.pinterest.com/resource/ApiResource/create/";
+        $filePath = TempFileController::GetPath($fileName);
+        $video = FFProbe::create([
+            'ffmpeg.binaries'  => exec('which ffmpeg'),
+            'ffprobe.binaries' => exec('which ffprobe')
+        ]);
+        $duration = $video->streams($filePath)->videos()->first()->get("duration") * 1000;
+        $id = getRandomHex(4)."-".getRandomHex(2).'-'.getRandomHex(2).'-'.getRandomHex(2).'-'.getRandomHex(6);
+
+        $client = new Client();
+        $headers = [
+            'authority' => 'www.pinterest.com',
+            'accept' => 'application/json, text/javascript, */*, q=0.01',
+            'accept-language' => 'en-US,en;q=0.9,vi;q=0.8',
+            'cache-control' => 'no-cache',
+            'content-type' => 'application/x-www-form-urlencoded',
+            'cookie' => 'csrftoken='.$csrftoken.'; g_state={"i_l":0}; _auth=1; _pinterest_sess='.$sess,
+            'origin' => 'https://www.pinterest.com',
+            'pragma' => 'no-cache',
+            'referer' => 'https://www.pinterest.com/',
+            'sec-ch-ua' => '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
+            'sec-ch-ua-full-version-list' => '"Chromium";v="118.0.5993.70", "Google Chrome";v="118.0.5993.70", "Not=A?Brand";v="99.0.0.0"',
+            'sec-ch-ua-mobile' => '?0',
+            'sec-ch-ua-model' => '""',
+            'sec-ch-ua-platform' => '"macOS"',
+            'sec-ch-ua-platform-version' => '"13.6.0"',
+            'sec-fetch-dest' => 'empty',
+            'sec-fetch-mode' => 'cors',
+            'sec-fetch-site' => 'same-origin',
+            'user-agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+            'x-app-version' => 'c8350c6',
+            'x-csrftoken' => $csrftoken,
+            'x-pinterest-appstate' => 'active',
+            'x-pinterest-pws-handler' => 'www/idea-pin-builder.js',
+            'x-pinterest-source-url' => '/idea-pin-builder/',
+            'x-requested-with' => 'XMLHttpRequest'
+        ];
+        $options = [
+            'form_params' => [
+                'source_url' => '/idea-pin-builder/',
+                'data' => '{"options":{"url":"/v3/media/uploads/register/batch/","data":{"media_info_list":"[{\\"id\\":\\"'.$id.'\\",\\"media_type\\":\\"video-story-pin\\",\\"upload_aux_data\\":{\\"clips\\":[{\\"durationMs\\":'.$duration.',\\"isFromImage\\":false,\\"startTimestampMs\\":-1}]}}]"}},"context":{}}'
+            ]];
+        $request = new Request('POST', $apiURL, $headers);
+        $res = $client->sendAsync($request, $options)->wait();
+        return json_decode($res->getBody(), true);
+    }
+
+    public static function upload_video($url, $parameter, $videoName) {
+        $client = new Client();
+        $headers = [
+            'sec-ch-ua' => '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
+            'sec-ch-ua-platform' => '"macOS"',
+            'Referer' => 'https://www.pinterest.com/',
+            'sec-ch-ua-mobile' => '?0',
+            'User-Agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'
+        ];
+        $options = [
+            'multipart' => [
+                [
+                    'name' => 'x-amz-date',
+                    'contents' => $parameter['x-amz-date']
+                ],
+                [
+                    'name' => 'x-amz-signature',
+                    'contents' => $parameter['x-amz-signature']
+                ],
+                [
+                    'name' => 'x-amz-security-token',
+                    'contents' => $parameter['x-amz-security-token']
+                ],
+                [
+                    'name' => 'x-amz-algorithm',
+                    'contents' => $parameter['x-amz-algorithm']
+                ],
+                [
+                    'name' => 'key',
+                    'contents' => $parameter['key']
+                ],
+                [
+                    'name' => 'policy',
+                    'contents' => $parameter['policy']
+                ],
+                [
+                    'name' => 'x-amz-credential',
+                    'contents' => $parameter['x-amz-credential']
+                ],
+                [
+                    'name' => 'Content-Type',
+                    'contents' => $parameter['Content-Type']
+                ],
+                [
+                    'name' => 'file',
+                    'contents' => Utils::tryFopen(TempFileController::GetPath($videoName), 'r'),
+
+                ]
+            ]];
+        $request = new Request('POST', $url, $headers);
+        $res = $client->sendAsync($request, $options)->wait();
+        return $res->getStatusCode();
+    }
+
+    public static function get_status_of_id($sess, $id) {
+        $client = new Client();
+        $headers = [
+            'X-Pinterest-PWS-Handler' => 'www/idea-pin-builder.js',
+            'Accept' => 'application/json, text/javascript, */*, q=0.01',
+            'X-Requested-With' => 'XMLHttpRequest',
+            'X-Pinterest-Source-Url' => '/idea-pin-builder/',
+            'Cookie' => '_auth=1; _pinterest_sess='.$sess
+            ];
+        $request = new Request('GET', 'https://www.pinterest.com/resource/VIPResource/get/?source_url=/idea-pin-builder/&data=%7B%22options%22%3A%7B%22upload_ids%22%3A%5B%22'.$id.'%22%5D%7D%2C%22context%22%3A%7B%7D%7D', $headers);
+        $res = $client->sendAsync($request)->wait();
+        return json_decode($res->getBody(), true);
+    }
+
+    public static function register_upload_image($sess, $fileName)
+    {
+        $csrftoken = bin2hex(random_bytes(32));
+        $apiURL = "https://www.pinterest.com/resource/ApiResource/create/";
+        $filePath = TempFileController::GetPath($fileName);
+        $ffmpeg = FFMpeg::create([
+            'ffmpeg.binaries'  => exec('which ffmpeg'),
+            'ffprobe.binaries' => exec('which ffprobe')
+        ]);
+        $video = $ffmpeg->open($filePath);
+        $video->frame(TimeCode::fromSeconds(0))->save(TempFileController::GetRootPath().'/'.$fileName.'.jpeg');
+        $id = getRandomHex(4)."-".getRandomHex(2).'-'.getRandomHex(2).'-'.getRandomHex(2).'-'.getRandomHex(6);
+
+        $client = new Client();
+        $headers = [
+            'authority' => 'www.pinterest.com',
+            'accept' => 'application/json, text/javascript, */*, q=0.01',
+            'accept-language' => 'en-US,en;q=0.9,vi;q=0.8',
+            'cache-control' => 'no-cache',
+            'content-type' => 'application/x-www-form-urlencoded',
+            'cookie' => 'csrftoken='.$csrftoken.'; g_state={"i_l":0}; _auth=1; _pinterest_sess='.$sess,
+            'origin' => 'https://www.pinterest.com',
+            'pragma' => 'no-cache',
+            'referer' => 'https://www.pinterest.com/',
+            'sec-ch-ua' => '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
+            'sec-ch-ua-full-version-list' => '"Chromium";v="118.0.5993.70", "Google Chrome";v="118.0.5993.70", "Not=A?Brand";v="99.0.0.0"',
+            'sec-ch-ua-mobile' => '?0',
+            'sec-ch-ua-model' => '""',
+            'sec-ch-ua-platform' => '"macOS"',
+            'sec-ch-ua-platform-version' => '"13.6.0"',
+            'sec-fetch-dest' => 'empty',
+            'sec-fetch-mode' => 'cors',
+            'sec-fetch-site' => 'same-origin',
+            'user-agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+            'x-app-version' => 'c8350c6',
+            'x-csrftoken' => $csrftoken,
+            'x-pinterest-appstate' => 'active',
+            'x-pinterest-pws-handler' => 'www/idea-pin-builder.js',
+            'x-pinterest-source-url' => '/idea-pin-builder/',
+            'x-requested-with' => 'XMLHttpRequest'
+        ];
+        $options = [
+            'form_params' => [
+                'source_url' => '/idea-pin-builder/',
+                'data' => '{"options":{"url":"/v3/media/uploads/register/batch/","data":{"media_info_list":"[{\\"id\\":\\"'.$id.'\\",\\"media_type\\":\\"image-story-pin\\"}]"}},"context":{}}'
+            ]];
+        $request = new Request('POST', $apiURL, $headers);
+        $res = $client->sendAsync($request, $options)->wait();
+        return json_decode($res->getBody(), true);
+    }
+
+    public static function upload_image($url, $parameter, $videoName) {
+        $client = new Client();
+        $headers = [
+            'sec-ch-ua' => '"Chromium";v="118", "Google Chrome";v="118", "Not=A?Brand";v="99"',
+            'sec-ch-ua-platform' => '"macOS"',
+            'Referer' => 'https://www.pinterest.com/',
+            'sec-ch-ua-mobile' => '?0',
+            'User-Agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36'
+        ];
+        $options = [
+            'multipart' => [
+                [
+                    'name' => 'x-amz-date',
+                    'contents' => $parameter['x-amz-date']
+                ],
+                [
+                    'name' => 'x-amz-signature',
+                    'contents' => $parameter['x-amz-signature']
+                ],
+                [
+                    'name' => 'x-amz-security-token',
+                    'contents' => $parameter['x-amz-security-token']
+                ],
+                [
+                    'name' => 'x-amz-algorithm',
+                    'contents' => $parameter['x-amz-algorithm']
+                ],
+                [
+                    'name' => 'key',
+                    'contents' => $parameter['key']
+                ],
+                [
+                    'name' => 'policy',
+                    'contents' => $parameter['policy']
+                ],
+                [
+                    'name' => 'x-amz-credential',
+                    'contents' => $parameter['x-amz-credential']
+                ],
+                [
+                    'name' => 'Content-Type',
+                    'contents' => $parameter['Content-Type']
+                ],
+                [
+                    'name' => 'file',
+                    'contents' => Utils::tryFopen(TempFileController::GetPath($videoName.'.jpeg'), 'r'),
+                ]
+            ]];
+        $request = new Request('POST', $url, $headers);
+        $res = $client->sendAsync($request, $options)->wait();
+        return $res->getStatusCode();
+    }
+
+
+
 }
+
+

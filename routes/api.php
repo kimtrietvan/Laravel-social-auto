@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PinterestController;
 use App\Http\Middleware\ValidateCreatePin;
 use Illuminate\Support\Facades\Http;
-
+use App\Http\Controllers\TempFileController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -62,4 +62,50 @@ Route::post("/user/board/create", function (Request $request) {
 
 
 })->middleware(ValidateCreatePin::class);
+
+//Route::get("/test", function () {
+//    $file = Http::get('https://www.simplilearn.com/ice9/free_resources_article_thumb/what_is_image_Processing.jpg')->body();
+//    $fileName = "test.jpg";
+//    return TempFileController::SaveAs($fileName, $file);
+//});
+
+Route::post("/test", function (Request $request) {
+    return PinterestController::register_upload_video($request->sess, $request->name);
+
+
+});
+
+Route::post("/test1", function (Request $request) {
+    $register_data = PinterestController::register_upload_video($request->sess, $request->name);
+    $register_id = array_keys($register_data['resource_response']['data'])[0];
+    $upload_parameters = $register_data['resource_response']['data'][$register_id]['upload_parameters'];
+    $upload_url = $register_data['resource_response']['data'][$register_id]['upload_url'];
+    $upload_id = $register_data['resource_response']['data'][$register_id]['upload_id'];
+    return PinterestController::upload_video($upload_url, $upload_parameters, $request->name);
+});
+
+Route::post("/test2", function (Request $request) {
+    $register_data = PinterestController::register_upload_video($request->sess, $request->name);
+    $register_id = array_keys($register_data['resource_response']['data'])[0];
+    $upload_parameters = $register_data['resource_response']['data'][$register_id]['upload_parameters'];
+    $upload_url = $register_data['resource_response']['data'][$register_id]['upload_url'];
+    $upload_video_id = $register_data['resource_response']['data'][$register_id]['upload_id'];
+    (PinterestController::upload_video($upload_url, $upload_parameters, $request->name));
+
+    $register_data = PinterestController::register_upload_image($request->sess, $request->name);
+    $register_id = array_keys($register_data['resource_response']['data'])[0];
+    $upload_parameters = $register_data['resource_response']['data'][$register_id]['upload_parameters'];
+    $upload_url = $register_data['resource_response']['data'][$register_id]['upload_url'];
+    $upload_image_id = $register_data['resource_response']['data'][$register_id]['upload_id'];
+    (PinterestController::upload_image($upload_url, $upload_parameters, $request->name));
+    sleep(5);
+    $response = array();
+    $response[0] = PinterestController::get_status_of_id($request->sess, $upload_video_id);
+    $response[1] = PinterestController::get_status_of_id($request->sess, $upload_image_id);
+    return $response;
+});
+
+Route::post("/test3", function (Request $request) {
+
+});
 
