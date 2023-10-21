@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+use App\Http\Controllers\PhpFFmpegController;
 use App\Http\Controllers\TempFileController;
 use FFMpeg\FFMpeg;
 use FFMpeg\FFProbe;
@@ -463,6 +464,30 @@ class PinterestController extends Controller
         $request = new Request('POST', $url, $headers);
         $res = $client->sendAsync($request, $options)->wait();
         return $res->getStatusCode();
+    }
+
+    public static function create_story_pinterest($sess, $pinData = array(), $fileName) {
+        $csrftoken = bin2hex(random_bytes(32));
+        $client = new Client();
+        $headers = [
+            'X-Pinterest-AppState' => 'background',
+            'X-Pinterest-PWS-Handler' => 'www/idea-pin-builder.js',
+            'X-Requested-With' => 'XMLHttpRequest',
+            'X-CSRFToken' => $csrftoken,
+            'Content-Type' => 'application/x-www-form-urlencoded',
+            'Accept' => 'application/json, text/javascript, */*, q=0.01',
+            'Referer' => 'https://www.pinterest.com/',
+            'X-Pinterest-Source-Url' => '/idea-pin-builder/',
+            'Cookie' => '_auth=0; _pinterest_sess='.$sess.'; csrftoken='.$csrftoken
+        ];
+        $options = [
+            'form_params' => [
+                'source_url' => '/idea-pin-builder/',
+                'data' => '{"options":{"allow_shopping_rec":true,"board_id":"'.$pinData['board_id'].'","description":"'.$pinData['note'].'","is_comments_allowed":true,"is_removable":false,"is_unified_builder":true,"link":"'.$pinData['link'].'","orbac_subject_id":"","story_pin":"{\\"metadata\\":{\\"pin_title\\":\\"'.$pinData['title'].'\\",\\"pin_image_signature\\":\\"'.$pinData['image_signature'].'\\",\\"canvas_aspect_ratio\\":1.7777777777777777},\\"pages\\":[{\\"blocks\\":[{\\"block_style\\":{\\"height\\":100,\\"width\\":100,\\"x_coord\\":0,\\"y_coord\\":0},\\"tracking_id\\":\\"'.$pinData['video_id'].'\\",\\"video_signature\\":\\"'.$pinData['video_signature'].'\\",\\"type\\":3}],\\"clips\\":[{\\"clip_type\\":1,\\"end_time_ms\\":-1,\\"is_converted_from_image\\":false,\\"source_media_height\\":'.PhpFFmpegController::GetHeight(TempFileController::GetPath($fileName)).',\\"source_media_width\\":'.PhpFFmpegController::GetWidth(TempFileController::GetPath($fileName)).',\\"start_time_ms\\":-1}],\\"layout\\":0,\\"style\\":{\\"background_color\\":\\"#FFFFFF\\"}}]}","user_mention_tags":"[]"},"context":{}}'
+            ]];
+        $request = new Request('POST', 'https://www.pinterest.com/resource/StoryPinResource/create/', $headers);
+        $res = $client->sendAsync($request, $options)->wait();
+        return json_decode($res->getBody(), true);
     }
 
 

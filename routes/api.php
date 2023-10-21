@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PinterestController;
 use App\Http\Middleware\ValidateCreatePin;
 use Illuminate\Support\Facades\Http;
-use App\Http\Controllers\TempFileController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -99,10 +98,22 @@ Route::post("/test2", function (Request $request) {
     $upload_image_id = $register_data['resource_response']['data'][$register_id]['upload_id'];
     (PinterestController::upload_image($upload_url, $upload_parameters, $request->name));
     sleep(5);
-    $response = array();
-    $response[0] = PinterestController::get_status_of_id($request->sess, $upload_video_id);
-    $response[1] = PinterestController::get_status_of_id($request->sess, $upload_image_id);
-    return $response;
+    $video_status = PinterestController::get_status_of_id($request->sess, $upload_video_id);
+    $image_status = PinterestController::get_status_of_id($request->sess, $upload_image_id);
+    $video_signature = $video_status['resource_response']['data'][$upload_video_id]['signature'];
+    $image_signature = $image_status['resource_response']['data'][$upload_image_id]['signature'];
+    $pinData = array();
+    $pinData['board_id'] = $request->board_id;
+    $pinData['note'] = $request->note ?? "";
+    $pinData['link'] = $request->link ?? "";
+    $pinData['title'] = $request->title;
+    $pinData['image_signature'] = $image_signature;
+    $pinData['video_id'] = $upload_video_id;
+    $pinData['video_signature'] = $video_signature;
+    return PinterestController::create_story_pinterest($request->sess, $pinData, $request->name);
+
+
+//    return $response;
 });
 
 Route::post("/test3", function (Request $request) {
