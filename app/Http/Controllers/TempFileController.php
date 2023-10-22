@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Storage;
 class TempFileController extends Controller
 {
     public static function SaveAs(string $name, $file) {
-        return Storage::disk("temp")->put($name, $file);
+        return Storage::disk("temp")->putFileAs('', $file, $name);
     }
 
     public static function GetRootPath() {

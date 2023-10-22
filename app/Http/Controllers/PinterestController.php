@@ -8,6 +8,7 @@ use FFMpeg\FFProbe;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Utils;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use FFMpeg\Coordinate\TimeCode;
 class PinterestController extends Controller
@@ -39,13 +40,13 @@ class PinterestController extends Controller
         }
     }
 
-    public static function get_board_list($sess, $username) {
+    public static function get_board_list($sess, $username, $proxy): \GuzzleHttp\Promise\PromiseInterface|\Illuminate\Http\Client\Response {
         $apiUrl = "https://www.pinterest.com/resource/BoardsResource/get/?source_url=%2F".$username."%2F&data=%7B%22options%22%3A%7B%22privacy_filter%22%3A%22all%22%2C%22sort%22%3A%22last_pinned_to%22%2C%22username%22%3A%22".$username."%22%7D%2C%22context%22%3A%7B%7D%7D";
         $response = Http::withHeaders([
             "Accept-Encoding" => 'gzip, deflate',
             "Cookie" => 'Cookie: csrftoken='.bin2hex(random_bytes(32)) .'; _auth=1; _pinterest_sess='.$sess.';'
-        ])->get($apiUrl)->json();
-        return $response["resource_response"]["data"];
+        ])->withOptions(['proxy' => $proxy])->get($apiUrl);
+        return $response;
     }
 
 
@@ -92,32 +93,22 @@ class PinterestController extends Controller
         }
     }
 
-    public static function get_user_data_from_cookie(string $sess, $proxy) {
+    public static function get_user_data_from_cookie(string $sess, $proxy): \GuzzleHttp\Promise\PromiseInterface|\Illuminate\Http\Client\Response
+    {
         if ($proxy == "") {
 
             $response = Http::withHeaders([
                 "Cookie" => '_pinterest_sess="' . $sess . '"',
                 "X-Requested-With" => "XMLHttpRequest",
                 "Referer" => "https://pinterest.com/login/"
-            ])->acceptJson()->get("https://www.pinterest.com/resource/HomefeedBadgingResource/get/")->json();
+            ])->acceptJson()->get("https://www.pinterest.com/resource/HomefeedBadgingResource/get/");
         }
         else {
             $response = Http::withHeaders([
                 "Cookie" => '_pinterest_sess="' . $sess . '"',
                 "X-Requested-With" => "XMLHttpRequest",
                 "Referer" => "https://pinterest.com/login/"
-            ])->withOptions(['proxy' => $proxy])->acceptJson()->get("https://www.pinterest.com/resource/HomefeedBadgingResource/get/")->json();
-        }
-        $userData = $response['client_context']['user'] ?? array();
-
-        $user = array();
-        if (!empty($userData['username'])) {
-            $user['username'] = $userData['username'];
-            $user['sessid'] = $sess;
-            $user['id'] = $userData['id'] ?? '';
-            $user['email'] = $userData['email'] ?? '';
-            $user['full_name'] = $userData['full_name'] ?? '';
-            return $user;
+            ])->withOptions(['proxy' => $proxy])->acceptJson()->get("https://www.pinterest.com/resource/HomefeedBadgingResource/get/");
         }
         return $response;
     }
@@ -150,7 +141,7 @@ class PinterestController extends Controller
                 "X-Requested-With" => "XMLHttpRequest",
                 "X-CSRFToken" => $csrftoken,
                 "Cookie" => 'csrftoken=' . $csrftoken . '; _pinterest_sess="' . $sess . '"; c_dpr=1'
-            ])->post($apiURL, ['data' => json_encode($pinData)])->json();
+            ])->post($apiURL, ['data' => json_encode($pinData)]);
         }
         return $response;
     }
@@ -250,10 +241,10 @@ class PinterestController extends Controller
         $apiURL = "https://www.pinterest.com/resource/ApiResource/create/";
         $filePath = TempFileController::GetPath($fileName);
         $video = FFProbe::create([
-            'ffmpeg.binaries'  => exec('which ffmpeg'),
-            'ffprobe.binaries' => exec('which ffprobe')
+            'ffmpeg.binaries'  => env('FFMPEG'),
+            'ffprobe.binaries' => env('FFPROBE')
         ]);
-        $duration = $video->streams($filePath)->videos()->first()->get("duration") * 1000;
+        $duration = (int) round($video->streams($filePath)->videos()->first()->get("duration") * 1000);
         $id = getRandomHex(4)."-".getRandomHex(2).'-'.getRandomHex(2).'-'.getRandomHex(2).'-'.getRandomHex(6);
 
         $client = new Client();
@@ -368,8 +359,8 @@ class PinterestController extends Controller
         $apiURL = "https://www.pinterest.com/resource/ApiResource/create/";
         $filePath = TempFileController::GetPath($fileName);
         $ffmpeg = FFMpeg::create([
-            'ffmpeg.binaries'  => exec('which ffmpeg'),
-            'ffprobe.binaries' => exec('which ffprobe')
+            'ffmpeg.binaries'  => env('FFMPEG'),
+            'ffprobe.binaries' => env('FFPROBE')
         ]);
         $video = $ffmpeg->open($filePath);
         $video->frame(TimeCode::fromSeconds(0))->save(TempFileController::GetRootPath().'/'.$fileName.'.jpeg');
