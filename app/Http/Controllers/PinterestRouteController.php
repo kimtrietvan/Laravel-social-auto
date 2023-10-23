@@ -106,33 +106,34 @@ class PinterestRouteController extends Controller
         $cookie = $request->input("cookie");
         $board_id = $request->input("board_id");
         $video_name = randomID().'.'.$request->file('file')->extension();
+        $proxy = $request->input('proxy') ?? '';
         TempFileController::SaveAs($video_name, $request->file('file'));
-        $register_video_data = PinterestController::register_upload_video($cookie, $video_name);
+        $register_video_data = PinterestController::register_upload_video($cookie, $video_name, $proxy);
         $register_video_id = array_keys($register_video_data['resource_response']['data'])[0];
         $upload_video_parameters = $register_video_data['resource_response']['data'][$register_video_id]['upload_parameters'];
         $upload_video_url = $register_video_data['resource_response']['data'][$register_video_id]['upload_url'];
         $upload_video_id = $register_video_data['resource_response']['data'][$register_video_id]['upload_id'];
-        $upload_video_response = PinterestController::upload_video($upload_video_url, $upload_video_parameters, $video_name);
+        $upload_video_response = PinterestController::upload_video($upload_video_url, $upload_video_parameters, $video_name, $proxy);
 
-        $register_image_data = PinterestController::register_upload_image($cookie, $video_name);
+        $register_image_data = PinterestController::register_upload_image($cookie, $video_name, $proxy);
         $register_image_id = array_keys($register_image_data['resource_response']['data'])[0];
         $upload_image_parameters = $register_image_data['resource_response']['data'][$register_image_id]['upload_parameters'];
         $upload_image_url = $register_image_data['resource_response']['data'][$register_image_id]['upload_url'];
         $upload_image_id = $register_image_data['resource_response']['data'][$register_image_id]['upload_id'];
-        $upload_image_response = PinterestController::upload_image($upload_image_url, $upload_image_parameters, $video_name);
+        $upload_image_response = PinterestController::upload_image($upload_image_url, $upload_image_parameters, $video_name, $proxy);
         sleep(2);
-        $video_status = PinterestController::get_status_of_id($cookie, $upload_video_id);
-        $image_status = PinterestController::get_status_of_id($cookie, $upload_image_id);
+        $video_status = PinterestController::get_status_of_id($cookie, $upload_video_id, $proxy);
+        $image_status = PinterestController::get_status_of_id($cookie, $upload_image_id, $proxy);
         $video_signature = $video_status['resource_response']['data'][$upload_video_id]['signature'];
         $image_signature = $image_status['resource_response']['data'][$upload_image_id]['signature'];
         $pinData = array();
-        $pinData['board_id'] = $request->input('board_id');
+        $pinData['board_id'] = $board_id;
         $pinData['note'] = $request->input('note') ?? "";
         $pinData['link'] = $request->input('link') ?? "";
         $pinData['title'] = $request->input('title');
         $pinData['image_signature'] = $image_signature;
         $pinData['video_id'] = $upload_video_id;
         $pinData['video_signature'] = $video_signature;
-        return PinterestController::create_story_pinterest($cookie, $pinData, $video_name);
+        return PinterestController::create_story_pinterest($cookie, $pinData, $video_name, $proxy);
     }
 }
