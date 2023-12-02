@@ -9,6 +9,7 @@ use App\Http\Controllers\DashboardController;
 use App\Models\Woocommerce;
 use App\Models\WoocommerceProductImage;
 use App\Models\WoocommerceProductSync;
+use App\Models\User;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -91,13 +92,30 @@ Route::prefix('/dashboard')->middleware('auth')->group(function () {
         return view('woocommerce_products', ['data' => $woocommerce_data]);
     })->name('woocommerce_product');
     Route::post('/woocommerce/sync', [\App\Http\Controllers\WoocommerceManagerController::class,'syncSite'])->name('woocommerce_sync_site');
+
+    Route::get('woocommerce/product/schedule/{id}', function ($id) {
+        $product = WoocommerceProduct::where('id', $id)->first();
+        if (!$product) return redirect('dashboard');
+        $woocommerce = Woocommerce::where('id', $product->woocommerce_id)->first();
+        if (!$woocommerce) return redirect('dashboard');
+        $user = User::where('id', $woocommerce->user_id)->first();
+        if (!$user) return redirect('dashboard');
+        if ($user->id != Auth::id()) {
+            return redirect('dashboard');
+        }
+        return view('add_woocommerce_product_schedule', ['product_id'=> $id]);
+    });
+    Route::post('woocommerce/product/schedule/{id}', [\App\Http\Controllers\ScheduleTask::class,'create']);
+});
+
+Route::get('close', function () {
+    return view('close_tab');
 });
 Route::get('/test', function () {
 
     $sync_request = WoocommerceProductSync::where('finished', 0)->get();
             foreach ($sync_request as $request) {
                 $site = Woocommerce::where('id', $request->woocommerce_id)->first();
-                // return print_r($site);
                 $base_url = $site->base_url;
                 $cs = $site->cs;
                 $ck = $site->ck;
