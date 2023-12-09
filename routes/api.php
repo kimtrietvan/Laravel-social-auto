@@ -25,6 +25,8 @@ use App\Http\Controllers\PinterestRouteController;
 //    return PinterestController::get_user_data_from_cookie($sess);
 //});
 
+//API post image or video to pinterest
+
 Route::get('/user', [PinterestRouteController::class, 'GetUserData']);
 Route::get('/user/board', [PinterestRouteController::class, 'GetBoardList']);
 Route::post('/user/board/image', [PinterestRouteController::class, 'PostImagePinToBoard']);
